@@ -19,7 +19,7 @@
 <main>
     <div class="card desc">
         <p>This is the showcase of dropzone and cropper integration via dzCropper module, found here: <a href="https://github.com/kiafar/dzcropper">https://github.com/kiafar/dzcropper</a></p>
-        <p>The dzCropper enforces crop with provided aspect ratio before uploading. It also limits the number of files and resizes the high resolution photos to reduce space.</p>
+        <p>The dzCropper enforces crop with provided aspect ratio before uploading, and limits the number of uploadable files.</p>
         <p>Since this is just an example, the images are not actually being uploaded.</p>
     </div>
     <div class="dropzone-wrapper"></div>
@@ -39,7 +39,9 @@
     // instantiate dropzone and cropper via dzCropper
     var $dzWrapper = $('.dropzone-wrapper');
     $dzWrapper.dzCropper({
-        clickable: ['.dropzone', '.btn-add-image']
+        clickable: ['.dropzone', '.btn-add-image'],
+        onMaxFileReached: function (num) { alert('You cannot add more than '+num+' already added files.'); },
+        onMaxDimentionReached: function (dim, limit) { alert('Added file dimention, '+dim+', exceeds the '+limit+' limit.');}
     });
     // place add more button
     var btnAddLeft = parseInt($('.dropzone-wrapper').css('marginLeft'));

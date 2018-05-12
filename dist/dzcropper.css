@@ -38,6 +38,13 @@
 }
 .dropzone .dz-preview .dz-remove::before { padding-right: 4px; }
 
+.dropzone .dz-preview .dz-error-message { top: -60px; }
+.dropzone .dz-preview .dz-error-message:after {
+    top: 66px;
+    border-bottom: none;
+    border-top: 6px solid #be2626;
+}
+
 img {
     max-width: 100%;
 }

@@ -31,13 +31,21 @@
         options = {},
         DEFAULTS = {
             // Maximum dimention of the final cropped image, both x and y
-            maxDimention: 900,
+            maxDimention: 5000,
             maxFiles: 2,
             // in MiB
             maxFilesize: 2,
             acceptedFiles: 'image/*',
             // clickable elements that trigger browse for file
             clickable: ['.dropzone'],
+            // Cropper js options
+            cropperOptions: {
+                aspectRatio: 1,
+                autoCropArea: 1,
+                movable: false,
+                cropBoxResizable: true,
+                rotatable: true,
+            },
             mainTemplate: '<form title="Drop images to upload, or click to browse" action="upload.php" class="dropzone" id="my-dropzone-container" method="post" enctype="multipart/form-data">' +
                 '<img src="img/upload.png" alt="upload" class="dz-upload-img"/>' +
                 '<div class="fallback">' +
@@ -68,10 +76,11 @@
                 '</div>',
             onDropzoneReady: function() {},
             onCropperReady: function() {},
+            onMaxFileReached: function() {},
+            onMaxDimentionReached: function() {},
         }
 
     $.fn.dzCropper = function (opts) {
-
         options = Object.assign({}, DEFAULTS, typeof (opts) !== 'undefined' && opts);
         options.clickable.push('.dz-upload-img');
 
@@ -107,9 +116,11 @@
             // ignore already cropped and re-rendered files
             if (file.cropped) {
                 return;
-            } else if (maxFilesReached(file.originalFile || file, myDropzone)) {
+            } else if (maxFilesReached(file)) {
                 myDropzone.removeFile(file);
-                alert('You cannot add more than '+ options.maxFiles + ' files.');
+                if (typeof(options.onMaxFileReached) === 'function') {
+                    options.onMaxFileReached(options.maxFiles);
+                }
                 return;
             }
             
@@ -126,34 +137,16 @@
                     var width = this.width;
                     var height = this.height;
 
-                    file.originalFile = file.originalFile ? file.originalFile : { name: file.name, size: file.size, lastModified: file.lastModified };
-                    
-                    if (width <= options.maxDimention || height <= options.maxDimention) {
+                    if (width <= options.maxDimention && height <= options.maxDimention) {
                         crop(image, file);
                         return;
-                    } else if (width > height) {
-                        width *= options.maxDimention / height;
-                        height = options.maxDimention;
                     } else {
-                        height *= options.maxDimention / width;
-                        width = options.maxDimention;
+                        myDropzone.removeFile(file);
+                        if (typeof(options.onMaxDimentionReached)==='function') {
+                            options.onMaxDimentionReached(width + 'x' + height + ' pixels', options.maxDimention + 'x' + options.maxDimention + ' pixels');
+                        }
+                        return;
                     }
-
-                    // Resize
-                    var canvas = document.createElement('canvas');
-                    canvas.width = width;
-                    canvas.height = height;
-
-                    var ctx = canvas.getContext("2d");
-                    ctx.fillStyle = "white";
-                    ctx.drawImage(image, 0, 0, width, height);
-
-                    var resizedFile = base64ToFile(canvas.toDataURL(), file);
-
-                    resizedFile.originalFile = file.originalFile;
-
-                    // add the resized file so this function is triggered again
-                    myDropzone.addFile(resizedFile);
                 }
             };
             // read uploaded file (triggers code above)
@@ -170,25 +163,21 @@
                 keyboard: true // This for keyboard event
             }).on('shown.bs.modal', function () {
                 highlightLastModal();
-                var cropper = new Cropper(img, {
-                    aspectRatio: 1,
-                    autoCropArea: 1,
-                    movable: false,
-                    cropBoxResizable: true,
-                    rotatable: true,
-                    ready: function() { if (typeof(options.onCropperReady) === 'function') options.onCropperReady($this.data('cropper')); }
-                });
+                if (typeof(options.cropperOptions) !== 'object') {
+                    options.cropperOptions = {};
+                }
+                if (typeof(options.cropperOptions.ready) !== 'function') {
+                    options.cropperOptions.ready = function() { if (typeof(options.onCropperReady) === 'function') options.onCropperReady($this.data('cropper')); }
+                }
+
+                var cropper = new Cropper(img, options.cropperOptions);
                 
                 $this.data('cropper', cropper);
                 
                 var $modal = $(this);
                 $modal.on('click', '.crop-upload', function () {
-                    // get cropped image data, fillColor makes sure png files wont get black canvas background
-                    var blob = cropper.getCroppedCanvas({
-                        fillColor: '#fff'
-                    }).toDataURL("image/jpeg", 0.9);
                     // transform it to Blob object
-                    var croppedFile = dataURItoBlob(blob);
+                    var croppedFile = toBlob(cropper.getCroppedCanvas({ fillColor: '#fff' }), 'image/jpeg', 0.9);
                     croppedFile.name = file.name;
                     croppedFile.cropped = true;
 
@@ -202,11 +191,15 @@
                     // Add file before checking so the user can see a visual feedback of the error if exceeds the limit
                     myDropzone.addFile(croppedFile);
                     if (croppedFile.size <= options.maxFilesize * 1024 * 1024) {
-                        myDropzone.enqueueFile(croppedFile);
-                        myDropzone.processQueue();
+                        try {
+                            myDropzone.enqueueFile(croppedFile);
+                            myDropzone.processQueue();
+                        } catch (e) {
+                            $modal.modal('hide');
+                        }
                     }
 
-                    actualFiles.push(file.originalFile);
+                    actualFiles.push(file);
 
                     $modal.modal('hide');
                 })
@@ -236,18 +229,22 @@
         }
 
         function maxFilesReached(file) {
+            if (options.maxFiles < 1) {
+                return true;
+            }
+
             var croppedFile = [];
-            for (let i = 0; i < myDropzone.files.length; i++) {
+            for (var i = 0; i < myDropzone.files.length; i++) {
                 var currFile = myDropzone.files[i];
                 if (currFile.cropped) {
                     croppedFile.push(currFile);
                 }
             }
 
-            if (Number.isInteger(options.maxFiles) && croppedFile.length < options.maxFiles) {
+            if (croppedFile.length < options.maxFiles) {
                 return false;
             } else {
-                for (let i = 0; i < actualFiles.length; i++) {
+                for (var i = 0; i < actualFiles.length; i++) {
                     currFile = actualFiles[i];
                     if (currFile.name === file.name && currFile.size === file.size) {
                         return false;
@@ -274,12 +271,7 @@
             content[i] = byteString.charCodeAt(i);
         }
 
-        var newFile = new File(
-            [new Uint8Array(content)], origFile.name, {
-                type: mimestring
-            }
-        );
-
+        var newFile = new File([new Uint8Array(content)], origFile.name, {type: mimestring});
 
         // Copy props set by the dropzone in the original file
 
@@ -299,6 +291,26 @@
         $('.modal').last().addClass('last');
     }
 
+    // From Pica. Support for toBlub for old browsers
+    var toBlob = function (canvas, mimeType, quality) {
+        mimeType = mimeType || 'image/png';
+        if (canvas.toBlob) {
+            canvas.toBlob(function (blob) {
+                return blob;
+            }, mimeType, quality);
+        }
+    
+        // Fallback for old browsers
+        var asString = atob(canvas.toDataURL(mimeType, quality).split(',')[1]);
+        var len = asString.length;
+        var asBuffer = new Uint8Array(len);
+    
+        for (var i = 0; i < len; i++) {
+            asBuffer[i] = asString.charCodeAt(i);
+        }
+    
+        return new Blob([asBuffer], { type: mimeType });
+      };
     // transform cropper dataURI output to a Blob which Dropzone accepts
     var dataURItoBlob = function (dataURI) {
         var byteString = atob(dataURI.split(',')[1]);
