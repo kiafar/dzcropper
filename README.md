@@ -1,10 +1,10 @@
 # dzCropper
 A jQuery module that integrates Dropzone.js and Cropper.js. This module also adds a few missing functionality to the mix.
 The added funtionalities are:
-1. Integrate Cropper.js right after file addded to dropzone.
-2. Automatically replace the cropped version with the original photo.
-3. Avoid adding new files when the maximum file number reached.
-4. More sophisticated styling
+1. Integrates Cropper.js with dropzone, right after file addded to dropzone. Correct callbacks fired.
+2. Automatically replaces the cropped version with the original photo.
+3. Blocks adding of new files when the maximum file number reached, unlike dropzone native functionality.
+4. More sophisticated styling.
 
 For demo please check http://tkiafar.com/dzcropper
 
@@ -21,7 +21,7 @@ Please add `dzcropper.min.css` stylesheet link to the header and `dzcropper.min.
 Cropper is now added to jQuery fn and is initiated on a container by the following code:
 `$('.dropzone-container')..dzCropper([options]);`
 The options is an object with key value pairs as follows:
-* __maxDimention__: The maximum width and hight of the cropped photo. If the photo is bigger than this, it will be resized to this square size.
+* __maxDimention__: The maximum width and hight allowed for incoming files.
 * __maxFiles__: (from Dropzone) Maximum files that user may upload.
 * __maxFilesize__: (from Dropzone) Maximum file size for each file in MiB.
 * __acceptedFiles__: (from Dropzone) File type (mime) to be accepted.
@@ -29,8 +29,13 @@ The options is an object with key value pairs as follows:
 * __cropperOptions__: Cropper options. If you override the cropper ready function, onCropperReady will not work.
 * __mainTemplate__: Main dropzone template to be injected into the current selected element.
 * __modalTemplate__: Cropzone template, currently implemented as bootstrap template.
-* __onDropzoneReady__: Callback to call when dropzone is instantiated. Dropzone instance is passed to this function.
-* __onCropperReady__: Callback to call when cropper is instantiated. Cropper instance is passed to this function.
+* __onDropzoneReady__: Callback when dropzone is instantiated. Dropzone instance is passed to this function.
+* __onCropperReady__: Callback when cropper is instantiated. Cropper instance is passed to this function.
+* __onMaxFileReached__: Callback when maximum number of files reached and new file is added, max num is passed to this function.
+* __onMaxDimentionReached__: Callback when maximum dimentions is breached. current image height and width and maxFiles are passed to this function.
+* __onFileAdded__: Callback when a cropped file is added, before upload starts. Cropped file is passed to this function.
+* __onFileRemoved__: Callback when a file being removed by user. The file is passed to this function.
+* __onSuccess__: Callback when a file is successfully uploaded. The file is passed to this function.
 
 
 ## Credits

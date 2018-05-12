@@ -78,6 +78,9 @@
             onCropperReady: function() {},
             onMaxFileReached: function() {},
             onMaxDimentionReached: function() {},
+            onFileAdded: function() {},
+            onFileRemoved: function() {},
+            onSuccess: function() {},
         }
 
     $.fn.dzCropper = function (opts) {
@@ -102,7 +105,7 @@
             acceptedFiles: options.acceptedFiles,
             dictDefaultMessage: 'Drop images here, or click to browse',
             dictRemoveFile: 'Remove',
-            init: function () { if (typeof(options.onDropzoneReady) === 'function') options.onDropzoneReady($this.data('dropzone')); },
+            init: function () { options.onDropzoneReady($this.data('dropzone')); },
         });
 
         $this.data('dropzone', myDropzone);
@@ -112,15 +115,37 @@
             onAddedFile(file);
         });
 
-        function onAddedFile(file) {
-            // ignore already cropped and re-rendered files
+        myDropzone.on('success', function (file) {
+            options.onSuccess(file);
+        });
+
+        myDropzone.on('removedfile', function (file) {
             if (file.cropped) {
+                var oldFile;
+                for (var i = 0; i < actualFiles.length; i++) {
+                    var fl = actualFiles[i];
+                    if (fl.croppedFile.uid === file.uid) {
+                        oldFile = fl;
+                        break;
+                    }
+                }
+                actualFiles.splice(actualFiles.indexOf(oldFile), 1);
+
+                options.onFileRemoved(file);
+            }
+        });
+
+        function onAddedFile(file) {
+            if (typeof(file.lastModified) !== 'number') {
+                file.lastModified = 0;
+            }
+            // ignore already cropped and re-rendered, fire added event
+            if (file.cropped) {
+                options.onFileAdded(file);
                 return;
             } else if (maxFilesReached(file)) {
                 myDropzone.removeFile(file);
-                if (typeof(options.onMaxFileReached) === 'function') {
-                    options.onMaxFileReached(options.maxFiles);
-                }
+                options.onMaxFileReached(options.maxFiles);
                 return;
             }
             
@@ -142,9 +167,7 @@
                         return;
                     } else {
                         myDropzone.removeFile(file);
-                        if (typeof(options.onMaxDimentionReached)==='function') {
-                            options.onMaxDimentionReached(width + 'x' + height + ' pixels', options.maxDimention + 'x' + options.maxDimention + ' pixels');
-                        }
+                        options.onMaxDimentionReached(width + 'x' + height + ' pixels', options.maxDimention + 'x' + options.maxDimention + ' pixels');
                         return;
                     }
                 }
@@ -167,7 +190,7 @@
                     options.cropperOptions = {};
                 }
                 if (typeof(options.cropperOptions.ready) !== 'function') {
-                    options.cropperOptions.ready = function() { if (typeof(options.onCropperReady) === 'function') options.onCropperReady($this.data('cropper')); }
+                    options.cropperOptions.ready = function() { options.onCropperReady($this.data('cropper')); }
                 }
 
                 var cropper = new Cropper(img, options.cropperOptions);
@@ -179,6 +202,8 @@
                     // transform it to Blob object
                     var croppedFile = toBlob(cropper.getCroppedCanvas({ fillColor: '#fff' }), 'image/jpeg', 0.9);
                     croppedFile.name = file.name;
+                    croppedFile.lastModified = file.lastModified;
+                    croppedFile.uid = Math.abs(hash(file.name+file.size+file.lastModified));
                     croppedFile.cropped = true;
 
                     var files = myDropzone.getAcceptedFiles();
@@ -191,12 +216,15 @@
                     // Add file before checking so the user can see a visual feedback of the error if exceeds the limit
                     myDropzone.addFile(croppedFile);
                     if (croppedFile.size <= options.maxFilesize * 1024 * 1024) {
-                        try {
-                            myDropzone.enqueueFile(croppedFile);
-                            myDropzone.processQueue();
-                        } catch (e) {
-                            $modal.modal('hide');
-                        }
+                        myDropzone.enqueueFile(croppedFile);
+                        myDropzone.processQueue();
+                    }
+
+                    file.croppedFile = {
+                        name: croppedFile.name,
+                        size: croppedFile.size,
+                        lastModified: croppedFile.lastModified,
+                        uid: croppedFile.uid,
                     }
 
                     actualFiles.push(file);
@@ -323,4 +351,17 @@
             type: 'image/jpeg'
         });
     };
+
+    var hash = function(str) {
+        var hash = 0;
+        if (str.length == 0) {
+            return hash;
+        }
+        for (var i = 0; i < str.length; i++) {
+            var char = str.charCodeAt(i);
+            hash = ((hash<<5)-hash)+char;
+            hash = hash & hash; // Convert to 32bit integer
+        }
+        return hash;
+    }
 })));
